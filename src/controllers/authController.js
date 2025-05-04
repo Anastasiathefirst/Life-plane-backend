@@ -12,6 +12,7 @@ export const signup = async (req, res) => {
 	req.body.roles = [role.id];
 	const user = await User.createUser(req.body);
 	const tokens = await tokenService.generateAuthTokens(user);
+	await emailService.sendVerificationEmail(user.email, tokens.access.token); // 🧠 Вот добавка
 	return res.json({
 		success: true,
 		data: { user, tokens }
