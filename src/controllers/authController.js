@@ -12,7 +12,7 @@ export const signup = async (req, res) => {
 	req.body.roles = [role.id];
 	const user = await User.createUser(req.body);
 	const tokens = await tokenService.generateAuthTokens(user);
-	await emailService.sendVerificationEmail(user.email, tokens.access.token); // 🧠 Вот добавка
+	await emailService.sendVerificationEmail(user.email, tokens.access.token);
 	return res.json({
 		success: true,
 		data: { user, tokens }
@@ -23,6 +23,9 @@ export const signin = async (req, res) => {
 	const user = await User.getUserByUserName(req.body.userName);
 	if (!user || !(await user.isPasswordMatch(req.body.password))) {
 		throw new APIError('Incorrect user name or password', httpStatus.BAD_REQUEST);
+	}
+	if (!user.confirmed) {
+		throw new APIError('Please verify your email before logging in.', httpStatus.UNAUTHORIZED);
 	}
 	const tokens = await tokenService.generateAuthTokens(user);
 	return res.json({
