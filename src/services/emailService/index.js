@@ -17,12 +17,17 @@ if (config.NODE_ENV !== 'test') {
 	transport
 		.verify()
 		.then(() => logger.info('Connected to email server'))
-		.catch(() => logger.warn('Unable to connect to email server'));
+		.catch((err) => logger.warn('Unable to connect to email server:', err));
 }
 
 export const sendEmail = async (to, subject, html) => {
 	const msg = { from: `${config.APP_NAME} <${config.EMAIL_FROM}>`, to, subject, html };
-	await transport.sendMail(msg);
+	try {
+		await transport.sendMail(msg);
+	} catch (err) {
+		logger.error('❌ Failed to send email:', err);
+		throw err;
+	}
 };
 
 export const sendResetPasswordEmail = async (to, token) => {
