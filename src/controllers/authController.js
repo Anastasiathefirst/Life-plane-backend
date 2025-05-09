@@ -5,8 +5,8 @@ import User from '~/models/userModel';
 import PendingUser from '~/models/pendingUser.model';
 import config from '~/config/config';
 import httpStatus from 'http-status';
-import Token from '~/models/tokenModel';
 import Role from '~/models/roleModel';
+import jwt from 'jsonwebtoken';
 
 export const signup = async (req, res) => {
   const { email, password, firstName, lastName, userName } = req.body;
@@ -18,7 +18,7 @@ export const signup = async (req, res) => {
   }
 
   const role = await Role.getRoleByName('User');
-  const verifyEmailToken = await tokenService.generateVerifyEmailToken({ email });
+  const verifyToken = await tokenService.generateVerifyEmailToken({ email });
 
   await PendingUser.create({
     email,
@@ -26,11 +26,10 @@ export const signup = async (req, res) => {
     firstName,
     lastName,
     userName,
-    roles: [role.id],
-    verifyToken: verifyEmailToken
+    roles: [role.id]
   });
 
-  await emailService.sendVerificationEmail(email, verifyEmailToken);
+  await emailService.sendVerificationEmail(email, verifyToken);
 
   return res.json({
     success: true,
@@ -41,9 +40,11 @@ export const signup = async (req, res) => {
 export const verifyEmail = async (req, res) => {
   try {
     const { token } = req.query;
-    const decoded = await tokenService.verifyToken(token, config.TOKEN_TYPES.VERIFY_EMAIL);
-    const pending = await PendingUser.findOne({ email: decoded });
 
+    const decoded = jwt.verify(token, config.JWT_ACCESS_TOKEN_SECRET_PUBLIC, { algorithms: ['RS256'] });
+    const email = decoded.sub;
+
+    const pending = await PendingUser.findOne({ email });
     if (!pending) {
       throw new APIError('Регистрация не найдена или устарела', httpStatus.NOT_FOUND);
     }
@@ -58,7 +59,7 @@ export const verifyEmail = async (req, res) => {
       confirmed: true
     });
 
-    await PendingUser.deleteOne({ email: pending.email });
+    await PendingUser.deleteOne({ email });
 
     const tokens = await tokenService.generateAuthTokens(user);
 
@@ -122,7 +123,7 @@ export const updateMe = async (req, res) => {
 };
 
 export const signout = async (req, res) => {
-  await Token.revokeToken(req.body.refreshToken, config.TOKEN_TYPES.REFRESH);
+  // Ничего не делаем — stateless logout
   return res.json({
     success: true,
     data: 'Signout success'
@@ -131,19 +132,20 @@ export const signout = async (req, res) => {
 
 export const refreshTokens = async (req, res) => {
   try {
-    const refreshTokenDoc = await tokenService.verifyToken(req.body.refreshToken, config.TOKEN_TYPES.REFRESH);
-    const user = await User.getUserById(refreshTokenDoc.user);
+    const decoded = jwt.verify(req.body.refreshToken, config.JWT_ACCESS_TOKEN_SECRET_PUBLIC, {
+      algorithms: ['RS256']
+    });
+    const user = await User.getUserById(decoded.sub);
     if (!user) {
-      throw new Error();
+      throw new Error('User not found');
     }
-    await refreshTokenDoc.remove();
     const tokens = await tokenService.generateAuthTokens(user);
     return res.json({
       success: true,
       data: { tokens }
     });
   } catch (err) {
-    throw new APIError(err.message, httpStatus.UNAUTHORIZED);
+    throw new APIError('Invalid refresh token', httpStatus.UNAUTHORIZED);
   }
 };
 
@@ -152,8 +154,8 @@ export const sendVerificationEmail = async (req, res) => {
   if (user.confirmed) {
     throw new APIError('Email already verified', httpStatus.BAD_REQUEST);
   }
-  const verifyEmailToken = await tokenService.generateVerifyEmailToken(req.user);
-  await emailService.sendVerificationEmail(req.user.email, verifyEmailToken);
+  const verifyToken = await tokenService.generateVerifyEmailToken(user);
+  await emailService.sendVerificationEmail(req.user.email, verifyToken);
   return res.json({
     success: true,
     data: 'Verification email sent'
@@ -161,8 +163,8 @@ export const sendVerificationEmail = async (req, res) => {
 };
 
 export const forgotPassword = async (req, res) => {
-  const resetPasswordToken = await tokenService.generateResetPasswordToken(req.body.email);
-  await emailService.sendResetPasswordEmail(req.body.email, resetPasswordToken);
+  const resetToken = await tokenService.generateResetPasswordToken(req.body.email);
+  await emailService.sendResetPasswordEmail(req.body.email, resetToken);
   return res.json({
     success: true,
     data: 'Password reset email sent'
@@ -171,12 +173,13 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    const resetPasswordTokenDoc = await tokenService.verifyToken(req.query.token, config.TOKEN_TYPES.RESET_PASSWORD);
-    const user = await User.getUserById(resetPasswordTokenDoc.user);
+    const decoded = jwt.verify(req.query.token, config.JWT_ACCESS_TOKEN_SECRET_PUBLIC, {
+      algorithms: ['RS256']
+    });
+    const user = await User.getUserById(decoded.sub);
     if (!user) {
-      throw new Error();
+      throw new Error('User not found');
     }
-    await Token.deleteMany({ user: user.id, type: config.TOKEN_TYPES.RESET_PASSWORD });
     await User.updateUserById(user.id, { password: req.body.password });
     return res.json({
       success: true,
