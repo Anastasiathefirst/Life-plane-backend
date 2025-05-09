@@ -2,26 +2,73 @@ import APIError from '~/utils/apiError';
 import tokenService from '~/services/tokenService';
 import emailService from '~/services/emailService';
 import User from '~/models/userModel';
+import PendingUser from '~/models/pendingUser.model';
 import config from '~/config/config';
 import httpStatus from 'http-status';
 import Token from '~/models/tokenModel';
 import Role from '~/models/roleModel';
 
 export const signup = async (req, res) => {
+  const { email, password, firstName, lastName, userName } = req.body;
+
+  const existingPending = await PendingUser.findOne({ email });
+  const existingUser = await User.getUserByEmail(email);
+  if (existingUser || existingPending) {
+    throw new APIError('Пользователь уже существует или ожидает подтверждения', httpStatus.CONFLICT);
+  }
+
   const role = await Role.getRoleByName('User');
-  req.body.roles = [role.id];
+  const verifyEmailToken = await tokenService.generateVerifyEmailToken({ email });
 
-  const user = await User.createUser(req.body);
-  const tokens = await tokenService.generateAuthTokens(user);
+  await PendingUser.create({
+    email,
+    password,
+    firstName,
+    lastName,
+    userName,
+    roles: [role.id],
+    verifyToken: verifyEmailToken
+  });
 
-  // Генерим токен ПРАВИЛЬНЫЙ — VERIFY_EMAIL
-  const verifyEmailToken = await tokenService.generateVerifyEmailToken(user);
-  await emailService.sendVerificationEmail(user.email, verifyEmailToken);
+  await emailService.sendVerificationEmail(email, verifyEmailToken);
 
   return res.json({
     success: true,
-    data: { user, tokens }
+    message: 'Письмо отправлено. Подтвердите email.'
   });
+};
+
+export const verifyEmail = async (req, res) => {
+  try {
+    const { token } = req.query;
+    const decoded = await tokenService.verifyToken(token, config.TOKEN_TYPES.VERIFY_EMAIL);
+    const pending = await PendingUser.findOne({ email: decoded });
+
+    if (!pending) {
+      throw new APIError('Регистрация не найдена или устарела', httpStatus.NOT_FOUND);
+    }
+
+    const user = await User.createUser({
+      email: pending.email,
+      password: pending.password,
+      firstName: pending.firstName,
+      lastName: pending.lastName,
+      userName: pending.userName,
+      roles: pending.roles,
+      confirmed: true
+    });
+
+    await PendingUser.deleteOne({ email: pending.email });
+
+    const tokens = await tokenService.generateAuthTokens(user);
+
+    return res.json({
+      success: true,
+      data: { user, tokens }
+    });
+  } catch (err) {
+    throw new APIError('Подтверждение email не удалось', httpStatus.UNAUTHORIZED);
+  }
 };
 
 export const signin = async (req, res) => {
@@ -93,9 +140,7 @@ export const refreshTokens = async (req, res) => {
     const tokens = await tokenService.generateAuthTokens(user);
     return res.json({
       success: true,
-      data: {
-        tokens
-      }
+      data: { tokens }
     });
   } catch (err) {
     throw new APIError(err.message, httpStatus.UNAUTHORIZED);
@@ -113,24 +158,6 @@ export const sendVerificationEmail = async (req, res) => {
     success: true,
     data: 'Verification email sent'
   });
-};
-
-export const verifyEmail = async (req, res) => {
-  try {
-    const verifyEmailTokenDoc = await tokenService.verifyToken(req.query.token, config.TOKEN_TYPES.VERIFY_EMAIL);
-    const user = await User.getUserById(verifyEmailTokenDoc.user);
-    if (!user) {
-      throw new Error();
-    }
-    await Token.deleteMany({ user: user.id, type: config.TOKEN_TYPES.VERIFY_EMAIL });
-    await User.updateUserById(user.id, { confirmed: true });
-    return res.json({
-      success: true,
-      data: 'Email verified successfully'
-    });
-  } catch (err) {
-    throw new APIError('Email verification failed', httpStatus.UNAUTHORIZED);
-  }
 };
 
 export const forgotPassword = async (req, res) => {

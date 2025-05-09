@@ -44,12 +44,6 @@ export const resetPassword = {
 	})
 };
 
-export const verifyEmail = {
-	query: Joi.object().keys({
-		token: Joi.string().required()
-	})
-};
-
 export const updateMe = {
 	body: Joi.object().keys({
 		firstName: Joi.string().trim().min(2).max(66),
@@ -67,7 +61,6 @@ export default {
 	updateMe,
 	signout,
 	refreshTokens,
-	verifyEmail,
 	forgotPassword,
 	resetPassword
 };

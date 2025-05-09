@@ -15,7 +15,7 @@ router.put('/me', authenticate(), validate(authValidation.updateMe), catchAsync(
 router.post('/signout', validate(authValidation.signout), catchAsync(authController.signout));
 router.post('/refresh-tokens', validate(authValidation.refreshTokens), catchAsync(authController.refreshTokens));
 router.post('/send-verification-email', authenticate(), catchAsync(authController.sendVerificationEmail));
-router.post('/verify-email', validate(authValidation.verifyEmail), catchAsync(authController.verifyEmail));
+router.get('/verify-email', catchAsync(authController.verifyEmail));
 router.post('/forgot-password', validate(authValidation.forgotPassword), catchAsync(authController.forgotPassword));
 router.post('/reset-password', validate(authValidation.resetPassword), catchAsync(authController.resetPassword));
 
