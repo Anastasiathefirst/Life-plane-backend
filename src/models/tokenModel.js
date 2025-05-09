@@ -1,65 +1,48 @@
-import httpStatus from 'http-status';
 import mongoose from 'mongoose';
-import config from '~/config/config';
-import APIError from '~/utils/apiError';
-import toJSON from './plugins/toJSONPlugin';
 
-const tokenSchema = mongoose.Schema(
-	{
-		user: {
-			type: mongoose.SchemaTypes.ObjectId,
-			ref: 'users',
-			required: true
-		},
-		token: {
-			type: String,
-			required: true,
-			index: true
-		},
-		type: {
-			type: String,
-			enum: [config.TOKEN_TYPES.REFRESH, config.TOKEN_TYPES.RESET_PASSWORD, config.TOKEN_TYPES.VERIFY_EMAIL],
-			required: true
-		},
-		blacklisted: {
-			type: Boolean,
-			default: false
-		},
-		expiresAt: {
-			type: Date,
-			required: true
-		}
-	},
-	{
-		timestamps: true
-	}
+const tokenSchema = new mongoose.Schema(
+  {
+    token: {
+      type: String,
+      required: true,
+      index: true,
+    },
+    user: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: true,
+    },
+    type: {
+      type: String,
+      enum: ['refresh', 'verifyEmail', 'resetPassword'],
+      required: true,
+    },
+    expiresAt: {
+      type: Date,
+      required: true,
+    },
+    blacklisted: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  {
+    timestamps: true,
+  }
 );
 
-tokenSchema.plugin(toJSON);
+// Статический метод для сохранения токена
+tokenSchema.statics.saveToken = async function (token, userId, expires, type, blacklisted = false) {
+  const tokenDoc = await this.create({
+    token,
+    user: userId,
+    expiresAt: expires,
+    type,
+    blacklisted,
+  });
+  return tokenDoc;
+};
 
-class TokenClass {
-	static async saveToken(token, userId, expires, type, blacklisted = false) {
-		const tokenDoc = await this.create({
-			user: userId,
-			token,
-			type,
-			expiresAt: expires,
-			blacklisted
-		});
-		return tokenDoc;
-	}
-
-	static async revokeToken(token, type) {
-		const tokenDoc = await this.findOne({ token: token, type: type, blacklisted: false });
-		if (!tokenDoc) {
-			throw new APIError('Token not found', httpStatus.BAD_REQUEST);
-		}
-		await tokenDoc.remove();
-	}
-}
-
-tokenSchema.loadClass(TokenClass);
-
-const Token = mongoose.model('tokens', tokenSchema);
+const Token = mongoose.model('Token', tokenSchema);
 
 export default Token;
