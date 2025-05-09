@@ -2,77 +2,43 @@ import APIError from '~/utils/apiError';
 import tokenService from '~/services/tokenService';
 import emailService from '~/services/emailService';
 import User from '~/models/userModel';
-import PendingUser from '~/models/pendingUser.model';
 import config from '~/config/config';
 import httpStatus from 'http-status';
 import Role from '~/models/roleModel';
 import jwt from 'jsonwebtoken';
-import { createInitialSpheres } from '~/controllers/sphereController';
+import * as sphereController from '~/controllers/sphereController';
 
 export const signup = async (req, res) => {
   const { email, password, firstName, lastName, userName } = req.body;
 
-  const existingPending = await PendingUser.findOne({ email });
   const existingUser = await User.getUserByEmail(email);
-  if (existingUser || existingPending) {
-    throw new APIError('Пользователь уже существует или ожидает подтверждения', httpStatus.CONFLICT);
+  if (existingUser) {
+    throw new APIError('Пользователь уже существует', httpStatus.CONFLICT);
   }
 
   const role = await Role.getRoleByName('User');
-  const verifyToken = await tokenService.generateVerifyEmailToken({ email });
-
-  await PendingUser.create({
+  const user = await User.createUser({
     email,
     password,
     firstName,
     lastName,
     userName,
-    roles: [role.id]
+    roles: [role.id],
+    confirmed: true
   });
 
-  await emailService.sendVerificationEmail(email, verifyToken);
+  await sphereController.createInitialSpheres(user.id);
+
+  const tokens = await tokenService.generateAuthTokens(user);
 
   return res.json({
     success: true,
-    message: 'Письмо отправлено. Подтвердите email.'
+    data: { user, tokens }
   });
 };
 
 export const verifyEmail = async (req, res) => {
-  try {
-    const { token } = req.query;
-
-    const decoded = jwt.verify(token, config.JWT_ACCESS_TOKEN_SECRET_PUBLIC, { algorithms: ['RS256'] });
-    const email = decoded.sub;
-
-    const pending = await PendingUser.findOne({ email });
-    if (!pending) {
-      throw new APIError('Регистрация не найдена или устарела', httpStatus.NOT_FOUND);
-    }
-
-    const user = await User.createUser({
-      email: pending.email,
-      password: pending.password,
-      firstName: pending.firstName,
-      lastName: pending.lastName,
-      userName: pending.userName,
-      roles: pending.roles,
-      confirmed: true
-    });
-
-    await PendingUser.deleteOne({ email });
-
-    await createInitialSpheres(user.id); // 🟢 добавлено: автоинициализация сфер
-
-    const tokens = await tokenService.generateAuthTokens(user);
-
-    return res.json({
-      success: true,
-      data: { user, tokens }
-    });
-  } catch (err) {
-    throw new APIError('Подтверждение email не удалось', httpStatus.UNAUTHORIZED);
-  }
+  throw new APIError('Подтверждение email временно отключено', httpStatus.NOT_IMPLEMENTED);
 };
 
 export const signin = async (req, res) => {
@@ -152,44 +118,15 @@ export const refreshTokens = async (req, res) => {
 };
 
 export const sendVerificationEmail = async (req, res) => {
-  const user = await User.getUserByEmail(req.user.email);
-  if (user.confirmed) {
-    throw new APIError('Email already verified', httpStatus.BAD_REQUEST);
-  }
-  const verifyToken = await tokenService.generateVerifyEmailToken(user);
-  await emailService.sendVerificationEmail(req.user.email, verifyToken);
-  return res.json({
-    success: true,
-    data: 'Verification email sent'
-  });
+  throw new APIError('Email verification временно отключено', httpStatus.NOT_IMPLEMENTED);
 };
 
 export const forgotPassword = async (req, res) => {
-  const resetToken = await tokenService.generateResetPasswordToken(req.body.email);
-  await emailService.sendResetPasswordEmail(req.body.email, resetToken);
-  return res.json({
-    success: true,
-    data: 'Password reset email sent'
-  });
+  throw new APIError('Password recovery временно отключено', httpStatus.NOT_IMPLEMENTED);
 };
 
 export const resetPassword = async (req, res) => {
-  try {
-    const decoded = jwt.verify(req.query.token, config.JWT_ACCESS_TOKEN_SECRET_PUBLIC, {
-      algorithms: ['RS256']
-    });
-    const user = await User.getUserById(decoded.sub);
-    if (!user) {
-      throw new Error('User not found');
-    }
-    await User.updateUserById(user.id, { password: req.body.password });
-    return res.json({
-      success: true,
-      data: 'Password has been reset'
-    });
-  } catch (err) {
-    throw new APIError('Password reset failed', httpStatus.UNAUTHORIZED);
-  }
+  throw new APIError('Password reset временно отключено', httpStatus.NOT_IMPLEMENTED);
 };
 
 export default {
