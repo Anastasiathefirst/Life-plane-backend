@@ -7,6 +7,7 @@ import config from '~/config/config';
 import httpStatus from 'http-status';
 import Role from '~/models/roleModel';
 import jwt from 'jsonwebtoken';
+import { createInitialSpheres } from '~/controllers/sphereController';
 
 export const signup = async (req, res) => {
   const { email, password, firstName, lastName, userName } = req.body;
@@ -60,6 +61,8 @@ export const verifyEmail = async (req, res) => {
     });
 
     await PendingUser.deleteOne({ email });
+
+    await createInitialSpheres(user.id); // 🟢 добавлено: автоинициализация сфер
 
     const tokens = await tokenService.generateAuthTokens(user);
 
@@ -123,7 +126,6 @@ export const updateMe = async (req, res) => {
 };
 
 export const signout = async (req, res) => {
-  // Ничего не делаем — stateless logout
   return res.json({
     success: true,
     data: 'Signout success'
