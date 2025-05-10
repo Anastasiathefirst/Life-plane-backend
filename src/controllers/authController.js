@@ -38,7 +38,12 @@ export const signup = async (req, res) => {
 };
 
 export const verifyEmail = async (req, res) => {
-  throw new APIError('Подтверждение email временно отключено', httpStatus.NOT_IMPLEMENTED);
+  try {
+    throw new APIError('Подтверждение email временно отключено', httpStatus.NOT_IMPLEMENTED);
+  } catch (err) {
+    console.error('verifyEmail error:', err);
+    throw new APIError('Ошибка при подтверждении email', httpStatus.INTERNAL_SERVER_ERROR);
+  }
 };
 
 export const signin = async (req, res) => {
