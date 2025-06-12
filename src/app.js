@@ -23,7 +23,9 @@ app.use(cors());
 app.use(rateLimiter);
 app.use(passport.initialize());
 app.use(express.static('public'));
-app.use('/api/v1', routes);
+
+app.use('/api/v1', routes); // 👈 support тоже теперь внутри v1
+
 app.use(error.converter);
 app.use(error.notFound);
 app.use(error.handler);

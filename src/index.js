@@ -4,6 +4,9 @@ import app from './app';
 import initialData from './config/initialData';
 import logger from './config/logger';
 
+// ⬇️ Подключаем Telegram-бота (он будет слушать, не как твои подписчики)
+import './services/telegramBot.js';
+
 let server;
 
 mongoose.Promise = global.Promise;
@@ -75,6 +78,6 @@ process.on('unhandledRejection', unexpectedErrorHandler);
 process.on('SIGTERM', () => {
 	logger.info('SIGTERM received');
 	if (server) {
-		server.close();
+		server.close();ы
 	}
 });

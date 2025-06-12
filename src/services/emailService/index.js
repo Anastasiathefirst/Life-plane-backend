@@ -6,7 +6,7 @@ import config from '~/config/config';
 export const transport = nodemailer.createTransport({
   host: config.SMTP_HOST,
   port: Number(config.SMTP_PORT),
-  secure: config.SMTP_SECURE === 'true', // false для 2525
+  secure: config.SMTP_SECURE === 'true', // false для порта 2525
   auth: {
     user: config.SMTP_USERNAME,
     pass: config.SMTP_PASSWORD,
@@ -42,10 +42,9 @@ export const sendResetPasswordEmail = async (to, token) => {
   await sendEmail(to, subject, html);
 };
 
-export const sendVerificationEmail = async (to, token) => {
-  const subject = 'Email Verification';
-  const verificationEmailUrl = `${config.FRONTEND_URL}/verify-email?token=${token}`;
-  const html = template.verifyEmail(verificationEmailUrl, config.APP_NAME);
+export const sendVerificationEmail = async (to, code) => {
+  const subject = 'Код подтверждения email';
+  const html = template.verifyEmail(code, config.APP_NAME);
   await sendEmail(to, subject, html);
 };
 

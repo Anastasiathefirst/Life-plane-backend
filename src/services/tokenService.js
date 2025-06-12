@@ -6,10 +6,16 @@ import jwtService from './jwtService';
 import httpStatus from 'http-status';
 import crypto from 'crypto';
 
-export const generateRandomToken = async (length = 66) => {
+/**
+ * Генерация случайного токена
+ */
+export const generateRandomToken = async (length = 32) => {
   return crypto.randomBytes(length).toString('hex');
 };
 
+/**
+ * Сравнение токена из запроса и ожидаемого
+ */
 export const verifyToken = async (token, expectedToken) => {
   if (token !== expectedToken) {
     throw new APIError('Invalid or expired token', httpStatus.UNAUTHORIZED);
@@ -17,6 +23,9 @@ export const verifyToken = async (token, expectedToken) => {
   return true;
 };
 
+/**
+ * Генерация access и refresh токенов
+ */
 export const generateAuthTokens = async (user) => {
   const accessTokenExpires = moment().add(config.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES, 'minutes');
   const accessToken = await jwtService.sign(user.id, accessTokenExpires, config.JWT_ACCESS_TOKEN_SECRET_PRIVATE, {
@@ -26,7 +35,6 @@ export const generateAuthTokens = async (user) => {
   const refreshTokenExpires = moment().add(config.REFRESH_TOKEN_EXPIRATION_DAYS, 'days');
   const refreshToken = await generateRandomToken();
 
-  // Example: attach refresh token to user manually if needed
   await user.saveRefreshToken(refreshToken, refreshTokenExpires.toDate());
 
   return {
@@ -41,8 +49,14 @@ export const generateAuthTokens = async (user) => {
   };
 };
 
-export const generateVerifyEmailToken = async () => {
-  const token = await generateRandomToken();
+/**
+ * Генерация токена подтверждения email
+ */
+export const generateVerifyEmailToken = async (user) => {
+  const token = await generateRandomToken(32);
+  user.emailVerificationToken = token;
+  user.emailVerificationExpires = moment().add(1, 'hour').toDate();
+  await user.save();
   return token;
 };
 
@@ -50,5 +64,5 @@ export default {
   generateRandomToken,
   verifyToken,
   generateAuthTokens,
-  generateVerifyEmailToken
+  generateVerifyEmailToken,
 };

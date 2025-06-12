@@ -14,8 +14,11 @@ router.get('/me', authenticate(), catchAsync(authController.getMe));
 router.put('/me', authenticate(), validate(authValidation.updateMe), catchAsync(authController.updateMe));
 router.post('/signout', validate(authValidation.signout), catchAsync(authController.signout));
 router.post('/refresh-tokens', validate(authValidation.refreshTokens), catchAsync(authController.refreshTokens));
+
+// 🎯 Добавленные руты для подтверждения почты
 router.post('/send-verification-email', authenticate(), catchAsync(authController.sendVerificationEmail));
 router.get('/verify-email', catchAsync(authController.verifyEmail));
+
 router.post('/forgot-password', validate(authValidation.forgotPassword), catchAsync(authController.forgotPassword));
 router.post('/reset-password', validate(authValidation.resetPassword), catchAsync(authController.resetPassword));
 
