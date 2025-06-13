@@ -3,6 +3,20 @@ import config from '~/config/config';
 import APIError from '~/utils/apiError';
 import httpStatus from 'http-status';
 
+// 🛠️ Диагностика
+console.log('⚙️ JWT_PRIVATE type:', typeof config.JWT_ACCESS_TOKEN_SECRET_PRIVATE);
+console.log('⚙️ JWT_PRIVATE raw:', config.JWT_ACCESS_TOKEN_SECRET_PRIVATE);
+console.log('⚙️ JWT_PUBLIC type:', typeof config.JWT_ACCESS_TOKEN_SECRET_PUBLIC);
+console.log('⚙️ JWT_PUBLIC raw:', config.JWT_ACCESS_TOKEN_SECRET_PUBLIC);
+
+// 🧠 Проверка и нормализация
+if (typeof config.JWT_ACCESS_TOKEN_SECRET_PRIVATE !== 'string') {
+  throw new Error('JWT_ACCESS_TOKEN_SECRET_PRIVATE must be a string');
+}
+if (typeof config.JWT_ACCESS_TOKEN_SECRET_PUBLIC !== 'string') {
+  throw new Error('JWT_ACCESS_TOKEN_SECRET_PUBLIC must be a string');
+}
+
 const privateKey = config.JWT_ACCESS_TOKEN_SECRET_PRIVATE.replace(/\\n/g, '\n');
 const publicKey = config.JWT_ACCESS_TOKEN_SECRET_PUBLIC.replace(/\\n/g, '\n');
 

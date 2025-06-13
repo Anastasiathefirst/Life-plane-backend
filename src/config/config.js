@@ -26,8 +26,8 @@ const envValidate = Joi.object()
     SMTP_PASSWORD: Joi.string().allow('').empty(''),
     EMAIL_FROM: Joi.string().allow('').empty(''),
 
-    MAILGUN_API_KEY: Joi.string().required(),         // 👈 ДОБАВЛЕНО
-    MAILGUN_DOMAIN: Joi.string().required(),          // 👈 ДОБАВЛЕНО
+    MAILGUN_API_KEY: Joi.string().required(),
+    MAILGUN_DOMAIN: Joi.string().required(),
 
     FRONTEND_URL: Joi.string().allow('').empty('').default('http://localhost:777'),
     IMAGE_URL: Joi.string().allow('').empty('').default('http://localhost:666/images')
@@ -54,8 +54,8 @@ export default {
     w: 'majority'
   },
 
-  JWT_ACCESS_TOKEN_SECRET_PRIVATE: Buffer.from(env.JWT_ACCESS_TOKEN_SECRET_PRIVATE, 'base64'),
-  JWT_ACCESS_TOKEN_SECRET_PUBLIC: Buffer.from(env.JWT_ACCESS_TOKEN_SECRET_PUBLIC, 'base64'),
+  JWT_ACCESS_TOKEN_SECRET_PRIVATE: env.JWT_ACCESS_TOKEN_SECRET_PRIVATE.replace(/\\n/g, '\n'),
+  JWT_ACCESS_TOKEN_SECRET_PUBLIC: env.JWT_ACCESS_TOKEN_SECRET_PUBLIC.replace(/\\n/g, '\n'),
   JWT_ACCESS_TOKEN_EXPIRATION_MINUTES: env.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES,
 
   REFRESH_TOKEN_EXPIRATION_DAYS: env.REFRESH_TOKEN_EXPIRATION_DAYS,
@@ -68,8 +68,8 @@ export default {
   SMTP_PASSWORD: env.SMTP_PASSWORD,
   EMAIL_FROM: env.EMAIL_FROM,
 
-  MAILGUN_API_KEY: env.MAILGUN_API_KEY,               // 👈 ДОБАВЛЕНО
-  MAILGUN_DOMAIN: env.MAILGUN_DOMAIN,                 // 👈 ДОБАВЛЕНО
+  MAILGUN_API_KEY: env.MAILGUN_API_KEY,
+  MAILGUN_DOMAIN: env.MAILGUN_DOMAIN,
 
   FRONTEND_URL: env.FRONTEND_URL,
   IMAGE_URL: env.IMAGE_URL,
