@@ -10,23 +10,6 @@ import httpStatus from 'http-status';
 
 const userSchema = mongoose.Schema(
   {
-    firstName: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    lastName: {
-      type: String,
-      required: true,
-      trim: true
-    },
-    userName: {
-      type: String,
-      required: true,
-      unique: true,
-      trim: true,
-      lowercase: true
-    },
     email: {
       type: String,
       required: true,
@@ -75,9 +58,9 @@ const userSchema = mongoose.Schema(
   },
   {
     timestamps: true,
-    toJSON: { 
+    toJSON: {
       virtuals: true,
-      transform: function(doc, ret) {
+      transform: function (doc, ret) {
         delete ret.password;
         delete ret.verifyToken;
         delete ret.verifyTokenExpires;
@@ -89,25 +72,10 @@ const userSchema = mongoose.Schema(
   }
 );
 
-// Плагины
 userSchema.plugin(toJSON);
 userSchema.plugin(paginate);
 
-// Виртуальные поля
-userSchema.virtual('avatarUrl').get(function () {
-  return `${config.IMAGE_URL}/${this.avatar}`;
-});
-
-userSchema.virtual('fullName').get(function () {
-  return `${this.firstName} ${this.lastName}`;
-});
-
 class UserClass {
-  static async isUserNameTaken(userName, excludeUserId) {
-    const user = await this.findOne({ userName, _id: { $ne: excludeUserId } });
-    return !!user;
-  }
-
   static async isEmailTaken(email, excludeUserId) {
     const user = await this.findOne({ email, _id: { $ne: excludeUserId } });
     return !!user;
@@ -123,20 +91,12 @@ class UserClass {
 
   static async getUserByIdWithRoles(id) {
     const user = await this.findById(id)
-      .populate({ 
-        path: 'roles', 
-        select: 'name description permissions' 
+      .populate({
+        path: 'roles',
+        select: 'name description permissions'
       })
       .exec();
-    
-    if (!user) {
-      throw new APIError('User not found', httpStatus.NOT_FOUND);
-    }
-    return user;
-  }
 
-  static async getUserByUserName(userName) {
-    const user = await this.findOne({ userName }).exec();
     if (!user) {
       throw new APIError('User not found', httpStatus.NOT_FOUND);
     }
@@ -144,23 +104,19 @@ class UserClass {
   }
 
   static async getUserByEmail(email) {
-    const user = await this.findOne({ email }).exec();
-    return user;
+    return this.findOne({ email }).exec();
   }
 
   static async createUser(userData) {
     if (await this.isEmailTaken(userData.email)) {
       throw new APIError('Email already taken', httpStatus.BAD_REQUEST);
     }
-    if (await this.isUserNameTaken(userData.userName)) {
-      throw new APIError('Username already taken', httpStatus.BAD_REQUEST);
-    }
 
     if (userData.roles && userData.roles.length > 0) {
-      const rolesExist = await Role.countDocuments({ 
-        _id: { $in: userData.roles } 
+      const rolesExist = await Role.countDocuments({
+        _id: { $in: userData.roles }
       });
-      
+
       if (rolesExist !== userData.roles.length) {
         throw new APIError('One or more roles do not exist', httpStatus.BAD_REQUEST);
       }
@@ -175,15 +131,12 @@ class UserClass {
     if (updateBody.email && (await this.isEmailTaken(updateBody.email, userId))) {
       throw new APIError('Email already taken', httpStatus.BAD_REQUEST);
     }
-    if (updateBody.userName && (await this.isUserNameTaken(updateBody.userName, userId))) {
-      throw new APIError('Username already taken', httpStatus.BAD_REQUEST);
-    }
 
     if (updateBody.roles && updateBody.roles.length > 0) {
-      const rolesExist = await Role.countDocuments({ 
-        _id: { $in: updateBody.roles } 
+      const rolesExist = await Role.countDocuments({
+        _id: { $in: updateBody.roles }
       });
-      
+
       if (rolesExist !== updateBody.roles.length) {
         throw new APIError('One or more roles do not exist', httpStatus.BAD_REQUEST);
       }
@@ -211,7 +164,8 @@ class UserClass {
   async createVerifyToken() {
     const verifyToken = crypto.randomBytes(32).toString('hex');
     this.verifyToken = verifyToken;
-    this.verifyTokenExpires = Date.now() + config.VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
+    this.verifyTokenExpires =
+      Date.now() + config.VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
     await this.save();
     return verifyToken;
   }
@@ -219,21 +173,21 @@ class UserClass {
   async createPasswordResetToken() {
     const resetToken = crypto.randomBytes(32).toString('hex');
     this.resetToken = resetToken;
-    this.resetTokenExpires = Date.now() + config.RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
+    this.resetTokenExpires =
+      Date.now() + config.RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
     await this.save();
     return resetToken;
   }
 }
 
-// Хуки
-userSchema.pre('save', async function(next) {
+userSchema.pre('save', async function (next) {
   if (this.isModified('password')) {
     this.password = await bcrypt.hash(this.password, 10);
   }
   next();
 });
 
-userSchema.pre('remove', async function(next) {
+userSchema.pre('remove', async function (next) {
   await Token.deleteMany({ user: this._id });
   next();
 });
