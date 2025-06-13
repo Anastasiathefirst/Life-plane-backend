@@ -6,7 +6,7 @@ import config from '~/config/config';
 export const transport = nodemailer.createTransport({
   host: config.SMTP_HOST,
   port: Number(config.SMTP_PORT),
-  secure: config.SMTP_SECURE === 'true', // false для порта 2525
+  secure: config.SMTP_SECURE === 'true',
   auth: {
     user: config.SMTP_USERNAME,
     pass: config.SMTP_PASSWORD,
@@ -27,29 +27,34 @@ export const sendEmail = async (to, subject, html) => {
     subject,
     html,
   };
+  console.log('➡️ Sending email:', { to, subject });
   try {
-    await transport.sendMail(msg);
+    const info = await transport.sendMail(msg);
+    console.log('✅ Email sent:', info.messageId);
+    return info;
   } catch (err) {
     logger.error('❌ Failed to send email:', err);
     throw err;
   }
 };
 
+export const sendVerificationEmail = async (to, token) => {
+  console.log('➡️ sendVerificationEmail token:', token);
+  const subject = 'Код подтверждения email';
+  const html = template.verifyEmail(token, config.APP_NAME);
+  return sendEmail(to, subject, html);
+};
+
 export const sendResetPasswordEmail = async (to, token) => {
+  console.log('➡️ sendResetPasswordEmail token:', token);
   const subject = 'Reset password';
   const resetPasswordUrl = `${config.FRONTEND_URL}/reset-password?token=${token}`;
   const html = template.resetPassword(resetPasswordUrl, config.APP_NAME);
-  await sendEmail(to, subject, html);
-};
-
-export const sendVerificationEmail = async (to, code) => {
-  const subject = 'Код подтверждения email';
-  const html = template.verifyEmail(code, config.APP_NAME);
-  await sendEmail(to, subject, html);
+  return sendEmail(to, subject, html);
 };
 
 export default {
   sendEmail,
-  sendResetPasswordEmail,
   sendVerificationEmail,
+  sendResetPasswordEmail,
 };

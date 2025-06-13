@@ -1,68 +1,54 @@
 import moment from 'moment';
 import config from '~/config/config';
 import APIError from '~/utils/apiError';
-import User from '~/models/userModel';
 import jwtService from './jwtService';
 import httpStatus from 'http-status';
 import crypto from 'crypto';
+import User from '~/models/userModel';
 
-/**
- * Генерация случайного токена
- */
 export const generateRandomToken = async (length = 32) => {
-  return crypto.randomBytes(length).toString('hex');
+  const token = crypto.randomBytes(length).toString('hex');
+  console.log('➡️ generateRandomToken:', token);
+  return token;
 };
 
-/**
- * Сравнение токена из запроса и ожидаемого
- */
-export const verifyToken = async (token, expectedToken) => {
-  if (token !== expectedToken) {
-    throw new APIError('Invalid or expired token', httpStatus.UNAUTHORIZED);
-  }
-  return true;
-};
-
-/**
- * Генерация access и refresh токенов
- */
 export const generateAuthTokens = async (user) => {
+  console.log('➡️ generateAuthTokens for user:', user.id);
   const accessTokenExpires = moment().add(config.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES, 'minutes');
-  const accessToken = await jwtService.sign(user.id, accessTokenExpires, config.JWT_ACCESS_TOKEN_SECRET_PRIVATE, {
-    algorithm: 'RS256',
-  });
+  const accessToken = await jwtService.sign(
+    user.id,
+    accessTokenExpires,
+    config.JWT_ACCESS_TOKEN_SECRET_PRIVATE,
+    { algorithm: 'RS256' }
+  );
+  console.log('➡️ Generated accessToken');
 
   const refreshTokenExpires = moment().add(config.REFRESH_TOKEN_EXPIRATION_DAYS, 'days');
   const refreshToken = await generateRandomToken();
-
   await user.saveRefreshToken(refreshToken, refreshTokenExpires.toDate());
+  console.log('➡️ Saved refreshToken');
 
   return {
-    accessToken: {
-      token: accessToken,
-      expires: accessTokenExpires.toDate(),
-    },
-    refreshToken: {
-      token: refreshToken,
-      expires: refreshTokenExpires.toDate(),
-    },
+    accessToken: { token: accessToken, expires: accessTokenExpires.toDate() },
+    refreshToken: { token: refreshToken, expires: refreshTokenExpires.toDate() },
   };
 };
 
-/**
- * Генерация токена подтверждения email
- */
 export const generateVerifyEmailToken = async (user) => {
+  console.log('➡️ generateVerifyEmailToken for user:', user.id);
   const token = await generateRandomToken(32);
+  console.log('➡️ verifyEmailToken:', token);
+
   user.emailVerificationToken = token;
   user.emailVerificationExpires = moment().add(1, 'hour').toDate();
   await user.save();
+  console.log('➡️ Saved emailVerificationToken');
+
   return token;
 };
 
 export default {
   generateRandomToken,
-  verifyToken,
   generateAuthTokens,
   generateVerifyEmailToken,
 };
