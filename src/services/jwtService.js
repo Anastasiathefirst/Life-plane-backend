@@ -3,35 +3,17 @@ import config from '~/config/config';
 import APIError from '~/utils/apiError';
 import httpStatus from 'http-status';
 
-// 🛠️ Диагностика
-console.log('⚙️ JWT_PRIVATE type:', typeof config.JWT_ACCESS_TOKEN_SECRET_PRIVATE);
-console.log('⚙️ JWT_PRIVATE raw:', config.JWT_ACCESS_TOKEN_SECRET_PRIVATE);
-console.log('⚙️ JWT_PUBLIC type:', typeof config.JWT_ACCESS_TOKEN_SECRET_PUBLIC);
-console.log('⚙️ JWT_PUBLIC raw:', config.JWT_ACCESS_TOKEN_SECRET_PUBLIC);
-
-// 🧠 Проверка и нормализация
-if (typeof config.JWT_ACCESS_TOKEN_SECRET_PRIVATE !== 'string') {
-  throw new Error('JWT_ACCESS_TOKEN_SECRET_PRIVATE must be a string');
-}
-if (typeof config.JWT_ACCESS_TOKEN_SECRET_PUBLIC !== 'string') {
-  throw new Error('JWT_ACCESS_TOKEN_SECRET_PUBLIC must be a string');
-}
-
-const privateKey = config.JWT_ACCESS_TOKEN_SECRET_PRIVATE.replace(/\\n/g, '\n');
-const publicKey = config.JWT_ACCESS_TOKEN_SECRET_PUBLIC.replace(/\\n/g, '\n');
-
-export const sign = (userId, expires, secret, options = {}) => {
+export const sign = (userId, expires, secret = config.JWT_SECRET, options = {}) => {
   try {
-    console.log('➡️ Signing JWT for user:', userId);
     const payload = {
       sub: userId,
       iat: Math.floor(Date.now() / 1000),
-      exp: expires.unix()
+      exp: Math.floor(expires.valueOf() / 1000)
     };
-    
-    return jwt.sign(payload, secret, { 
-      algorithm: 'RS256',
-      ...options 
+
+    return jwt.sign(payload, secret, {
+      algorithm: 'HS256',
+      ...options
     });
   } catch (error) {
     console.error('❌ JWT signing error:', error);
@@ -39,10 +21,9 @@ export const sign = (userId, expires, secret, options = {}) => {
   }
 };
 
-export const verify = (token, secret) => {
+export const verify = (token, secret = config.JWT_SECRET) => {
   try {
-    console.log('➡️ Verifying JWT token');
-    return jwt.verify(token, secret, { algorithms: ['RS256'] });
+    return jwt.verify(token, secret, { algorithms: ['HS256'] });
   } catch (error) {
     console.error('❌ JWT verification error:', error);
     throw new APIError('Invalid token', httpStatus.UNAUTHORIZED);

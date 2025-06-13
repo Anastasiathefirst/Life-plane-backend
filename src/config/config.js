@@ -12,25 +12,24 @@ const envValidate = Joi.object()
 
     DATABASE_URI: Joi.string().required(),
 
-    JWT_ACCESS_TOKEN_SECRET_PRIVATE: Joi.string().required(),
-    JWT_ACCESS_TOKEN_SECRET_PUBLIC: Joi.string().required(),
-    JWT_ACCESS_TOKEN_EXPIRATION_MINUTES: Joi.number().allow('').empty('').default(240),
+    JWT_SECRET: Joi.string().required(),
+    JWT_ACCESS_TOKEN_EXPIRATION_MINUTES: Joi.number().default(240),
 
-    REFRESH_TOKEN_EXPIRATION_DAYS: Joi.number().allow('').empty('').default(1),
-    VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES: Joi.number().allow('').empty('').default(60),
-    RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES: Joi.number().allow('').empty('').default(30),
+    REFRESH_TOKEN_EXPIRATION_DAYS: Joi.number().default(1),
+    VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES: Joi.number().default(60),
+    RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES: Joi.number().default(30),
 
-    SMTP_HOST: Joi.string().allow('').empty(''),
-    SMTP_PORT: Joi.number().allow('').empty(''),
-    SMTP_USERNAME: Joi.string().allow('').empty(''),
-    SMTP_PASSWORD: Joi.string().allow('').empty(''),
-    EMAIL_FROM: Joi.string().allow('').empty(''),
+    SMTP_HOST: Joi.string(),
+    SMTP_PORT: Joi.number(),
+    SMTP_USERNAME: Joi.string(),
+    SMTP_PASSWORD: Joi.string(),
+    EMAIL_FROM: Joi.string(),
 
     MAILGUN_API_KEY: Joi.string().required(),
     MAILGUN_DOMAIN: Joi.string().required(),
 
-    FRONTEND_URL: Joi.string().allow('').empty('').default('http://localhost:777'),
-    IMAGE_URL: Joi.string().allow('').empty('').default('http://localhost:666/images')
+    FRONTEND_URL: Joi.string().default('http://localhost:777'),
+    IMAGE_URL: Joi.string().default('http://localhost:666/images')
   })
   .unknown();
 
@@ -54,8 +53,7 @@ export default {
     w: 'majority'
   },
 
-  JWT_ACCESS_TOKEN_SECRET_PRIVATE: env.JWT_ACCESS_TOKEN_SECRET_PRIVATE.replace(/\\n/g, '\n'),
-  JWT_ACCESS_TOKEN_SECRET_PUBLIC: env.JWT_ACCESS_TOKEN_SECRET_PUBLIC.replace(/\\n/g, '\n'),
+  JWT_SECRET: env.JWT_SECRET,
   JWT_ACCESS_TOKEN_EXPIRATION_MINUTES: env.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES,
 
   REFRESH_TOKEN_EXPIRATION_DAYS: env.REFRESH_TOKEN_EXPIRATION_DAYS,
