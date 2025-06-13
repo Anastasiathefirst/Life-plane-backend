@@ -5,6 +5,7 @@ import jwtService from './jwtService';
 import httpStatus from 'http-status';
 import crypto from 'crypto';
 import User from '~/models/userModel';
+import Token from '~/models/tokenModel';
 
 export const generateRandomToken = async (length = 32) => {
   const token = crypto.randomBytes(length).toString('hex');
@@ -14,37 +15,57 @@ export const generateRandomToken = async (length = 32) => {
 
 export const generateAuthTokens = async (user) => {
   console.log('➡️ generateAuthTokens for user:', user.id);
-  const accessTokenExpires = moment().add(config.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES, 'minutes');
-  const accessToken = await jwtService.sign(
-    user.id,
-    accessTokenExpires,
-    config.JWT_ACCESS_TOKEN_SECRET_PRIVATE,
-    { algorithm: 'RS256' }
-  );
-  console.log('➡️ Generated accessToken');
+  
+  try {
+    const accessTokenExpires = moment().add(config.JWT_ACCESS_TOKEN_EXPIRATION_MINUTES, 'minutes');
+    const accessToken = await jwtService.sign(
+      user.id,
+      accessTokenExpires,
+      config.JWT_ACCESS_TOKEN_SECRET_PRIVATE
+    );
+    console.log('➡️ Generated accessToken');
 
-  const refreshTokenExpires = moment().add(config.REFRESH_TOKEN_EXPIRATION_DAYS, 'days');
-  const refreshToken = await generateRandomToken();
-  await user.saveRefreshToken(refreshToken, refreshTokenExpires.toDate());
-  console.log('➡️ Saved refreshToken');
+    const refreshTokenExpires = moment().add(config.REFRESH_TOKEN_EXPIRATION_DAYS, 'days');
+    const refreshToken = await generateRandomToken();
+    
+    await Token.saveToken(
+      refreshToken,
+      user.id,
+      refreshTokenExpires.toDate(),
+      'refresh'
+    );
+    console.log('➡️ Saved refreshToken');
 
-  return {
-    accessToken: { token: accessToken, expires: accessTokenExpires.toDate() },
-    refreshToken: { token: refreshToken, expires: refreshTokenExpires.toDate() },
-  };
+    return {
+      accessToken: { token: accessToken, expires: accessTokenExpires.toDate() },
+      refreshToken: { token: refreshToken, expires: refreshTokenExpires.toDate() },
+    };
+  } catch (error) {
+    console.error('❌ Error in generateAuthTokens:', error);
+    throw error;
+  }
 };
 
 export const generateVerifyEmailToken = async (user) => {
   console.log('➡️ generateVerifyEmailToken for user:', user.id);
-  const token = await generateRandomToken(32);
-  console.log('➡️ verifyEmailToken:', token);
+  
+  try {
+    const token = await generateRandomToken(32);
+    console.log('➡️ verifyEmailToken:', token);
 
-  user.emailVerificationToken = token;
-  user.emailVerificationExpires = moment().add(1, 'hour').toDate();
-  await user.save();
-  console.log('➡️ Saved emailVerificationToken');
+    await Token.saveToken(
+      token,
+      user.id,
+      moment().add(config.VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES, 'minutes').toDate(),
+      'verifyEmail'
+    );
+    console.log('➡️ Saved emailVerificationToken');
 
-  return token;
+    return token;
+  } catch (error) {
+    console.error('❌ Error in generateVerifyEmailToken:', error);
+    throw error;
+  }
 };
 
 export default {

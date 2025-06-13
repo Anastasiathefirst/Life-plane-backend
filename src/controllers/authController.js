@@ -8,19 +8,33 @@ import * as sphereController from '~/controllers/sphereController';
 
 export const signup = async (req, res) => {
   try {
-    console.log('➡️ Signup request body:', req.body);
+    console.log('➡️ Signup request headers:', JSON.stringify(req.headers));
+    console.log('➡️ Signup raw body:', JSON.stringify(req.body));
+
+    if (!req.is('application/json')) {
+      throw new APIError('Invalid Content-Type', httpStatus.BAD_REQUEST);
+    }
 
     const { email, password, firstName, lastName, userName } = req.body;
+    
+    if (!email || !password || !firstName || !lastName || !userName) {
+      throw new APIError('Missing required fields', httpStatus.BAD_REQUEST);
+    }
+
+    console.log('🔍 Checking existing user for email:', email);
     const existingUser = await User.getUserByEmail(email);
-    console.log('➡️ existingUser:', existingUser);
     if (existingUser) {
-      console.warn('⚠️ Пользователь уже существует:', email);
+      console.warn('⚠️ User already exists:', email);
       throw new APIError('Пользователь уже существует', httpStatus.CONFLICT);
     }
 
+    console.log('🔍 Getting User role');
     const role = await Role.getRoleByName('User');
-    console.log('➡️ role:', role);
+    if (!role) {
+      throw new APIError('Role not found', httpStatus.INTERNAL_SERVER_ERROR);
+    }
 
+    console.log('🛠 Creating new user');
     const user = await User.createUser({
       email,
       password,
@@ -30,36 +44,41 @@ export const signup = async (req, res) => {
       roles: [role.id],
       confirmed: false,
     });
-    console.log('➡️ Created user:', user);
+
     if (!user) {
       throw new APIError('Ошибка создания пользователя', httpStatus.INTERNAL_SERVER_ERROR);
     }
 
+    console.log('🔑 Generating verification token');
     const verifyToken = await tokenService.generateVerifyEmailToken(user);
-    console.log('➡️ Generated verifyToken:', verifyToken);
-
-    user.verifyToken = verifyToken;
-    user.verifyTokenExpires = Date.now() + 3600_000;
-    await user.save();
-    console.log('➡️ user saved with verifyToken');
-
-    await emailService.sendVerificationEmail(user.email, verifyToken);
-    console.log('➡️ Verification email sent to:', user.email);
-
-    await sphereController.createInitialSpheres(user.id);
-    console.log('➡️ Initial spheres created for user');
-
+    
+    console.log('🔑 Generating auth tokens');
     const tokens = await tokenService.generateAuthTokens(user);
-    console.log('✅ Tokens generated:', tokens);
 
-    return res.json({
+    console.log('📨 Sending verification email');
+    await emailService.sendVerificationEmail(user.email, verifyToken);
+    
+    console.log('🌐 Creating initial spheres');
+    await sphereController.createInitialSpheres(user.id);
+
+    console.log('✅ User registration successful');
+    return res.status(httpStatus.CREATED).json({
       success: true,
-      data: { user, tokens },
+      data: { 
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          userName: user.userName
+        },
+        tokens 
+      },
     });
   } catch (err) {
     console.error('🔥 Error in signup:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -69,30 +88,36 @@ export const verifyEmail = async (req, res) => {
   try {
     console.log('🔍 Verifying email token:', req.query.token);
     const { token } = req.query;
-    const user = await User.findOne({
-      verifyToken: token,
-      verifyTokenExpires: { $gt: Date.now() },
-    });
-    console.log('➡️ Found user for verifyEmail:', user);
+
+    if (!token) {
+      throw new APIError('Token is required', httpStatus.BAD_REQUEST);
+    }
+
+    const user = await User.findOneAndUpdate(
+      { 
+        verifyToken: token,
+        verifyTokenExpires: { $gt: Date.now() }
+      },
+      { 
+        $set: { confirmed: true },
+        $unset: { verifyToken: 1, verifyTokenExpires: 1 }
+      },
+      { new: true }
+    );
 
     if (!user) {
       throw new APIError('Ссылка недействительна или истек срок действия', httpStatus.BAD_REQUEST);
     }
 
-    user.confirmed = true;
-    user.verifyToken = undefined;
-    user.verifyTokenExpires = undefined;
-    await user.save();
     console.log('✅ Email confirmed for:', user.email);
-
     return res.json({
       success: true,
       message: 'Email подтверждён',
     });
   } catch (err) {
     console.error('❌ Error in verifyEmail:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -100,29 +125,50 @@ export const verifyEmail = async (req, res) => {
 
 export const signin = async (req, res) => {
   try {
-    console.log('🔑 Signin body:', req.body);
+    console.log('🔑 Signin request:', JSON.stringify(req.body));
     const { userName, password } = req.body;
-    const user = await User.getUserByUserName(userName);
-    console.log('➡️ Found user for signin:', user);
 
-    if (!user || !(await user.isPasswordMatch(password))) {
+    if (!userName || !password) {
+      throw new APIError('Username and password are required', httpStatus.BAD_REQUEST);
+    }
+
+    console.log('🔍 Finding user:', userName);
+    const user = await User.getUserByUserName(userName);
+    if (!user) {
       throw new APIError('Неверные учетные данные', httpStatus.UNAUTHORIZED);
     }
+
+    console.log('🔐 Checking password');
+    const isPasswordMatch = await user.isPasswordMatch(password);
+    if (!isPasswordMatch) {
+      throw new APIError('Неверные учетные данные', httpStatus.UNAUTHORIZED);
+    }
+
     if (!user.confirmed) {
       throw new APIError('Email не подтверждён', httpStatus.UNAUTHORIZED);
     }
 
+    console.log('🔑 Generating auth tokens');
     const tokens = await tokenService.generateAuthTokens(user);
-    console.log('✅ Signin tokens:', tokens);
 
+    console.log('✅ Login successful for:', user.userName);
     return res.json({
       success: true,
-      data: { user, tokens },
+      data: { 
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          userName: user.userName
+        },
+        tokens 
+      },
     });
   } catch (err) {
     console.error('❌ Error in signin:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -132,51 +178,43 @@ export const current = async (req, res) => {
   try {
     console.log('👤 Getting current user:', req.user.id);
     const user = await User.getUserByIdWithRoles(req.user.id);
-    return res.json({ success: true, data: user });
+    if (!user) {
+      throw new APIError('User not found', httpStatus.NOT_FOUND);
+    }
+    return res.json({ 
+      success: true, 
+      data: user 
+    });
   } catch (err) {
     console.error('❌ Error in current:', err);
-    res.status(500).json({ status: 500, errors: 'Internal Server Error' });
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
+      errors: err.message || 'Internal Server Error',
+    });
   }
-};
-
-export const getMe = async (req, res) => {
-  try {
-    console.log('👤 Getting getMe user:', req.user.id);
-    const user = await User.getUserById(req.user.id);
-    return res.json({ success: true, data: user });
-  } catch (err) {
-    console.error('❌ Error in getMe:', err);
-    res.status(500).json({ status: 500, errors: 'Internal Server Error' });
-  }
-};
-
-export const updateMe = async (req, res) => {
-  try {
-    console.log('🛠 Updating user:', req.user.id);
-    const updated = await User.updateUserById(req.user.id, req.body);
-    return res.json({ success: true, data: updated });
-  } catch (err) {
-    console.error('❌ Error in updateMe:', err);
-    res.status(500).json({ status: 500, errors: 'Internal Server Error' });
-  }
-};
-
-export const signout = async (req, res) => {
-  console.log('🚪 User signout:', req.user?.id);
-  return res.json({ success: true, message: 'Выход выполнен' });
 };
 
 export const refreshTokens = async (req, res) => {
   try {
-    console.log('🔁 Refreshing tokens:', req.body.refreshToken);
-    const user = await tokenService.verifyRefreshToken(req.body.refreshToken);
+    console.log('🔄 Refreshing tokens with:', req.body.refreshToken);
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      throw new APIError('Refresh token is required', httpStatus.BAD_REQUEST);
+    }
+
+    const user = await tokenService.verifyRefreshToken(refreshToken);
     const tokens = await tokenService.generateAuthTokens(user);
-    console.log('✅ Tokens refreshed:', tokens);
-    return res.json({ success: true, data: { user, tokens } });
+
+    console.log('✅ Tokens refreshed for:', user.id);
+    return res.json({ 
+      success: true, 
+      data: { tokens } 
+    });
   } catch (err) {
     console.error('❌ Error in refreshTokens:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -184,23 +222,31 @@ export const refreshTokens = async (req, res) => {
 
 export const sendVerificationEmail = async (req, res) => {
   try {
-    console.log('📨 sendVerificationEmail for user:', req.user.id);
+    console.log('📨 Request to send verification email for:', req.user.id);
     const user = await User.getUserById(req.user.id);
     if (!user) {
       throw new APIError('Пользователь не найден', httpStatus.NOT_FOUND);
     }
 
+    if (user.confirmed) {
+      return res.json({ 
+        success: true, 
+        message: 'Email уже подтверждён' 
+      });
+    }
+
     const verifyToken = await tokenService.generateVerifyEmailToken(user);
-    console.log('➡️ New verifyToken:', verifyToken);
-
     await emailService.sendVerificationEmail(user.email, verifyToken);
-    console.log('📨 Verification email sent to:', user.email);
 
-    return res.json({ success: true, message: 'Письмо отправлено' });
+    console.log('✅ Verification email sent to:', user.email);
+    return res.json({ 
+      success: true, 
+      message: 'Письмо отправлено' 
+    });
   } catch (err) {
-    console.error('📩 Error in sendVerificationEmail:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    console.error('❌ Error in sendVerificationEmail:', err);
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -208,28 +254,30 @@ export const sendVerificationEmail = async (req, res) => {
 
 export const forgotPassword = async (req, res) => {
   try {
-    console.log('🔑 forgotPassword email:', req.body.email);
-    const user = await User.getUserByEmail(req.body.email);
+    console.log('🔑 Forgot password request for:', req.body.email);
+    const { email } = req.body;
+    
+    if (!email) {
+      throw new APIError('Email is required', httpStatus.BAD_REQUEST);
+    }
+
+    const user = await User.getUserByEmail(email);
     if (!user) {
       throw new APIError('Пользователь не найден', httpStatus.NOT_FOUND);
     }
 
     const resetToken = await tokenService.generateVerifyEmailToken(user);
-    console.log('➡️ resetToken:', resetToken);
-
-    user.resetToken = resetToken;
-    user.resetTokenExpires = Date.now() + 3600_000;
-    await user.save();
-    console.log('➡️ User updated with resetToken');
-
     await emailService.sendResetPasswordEmail(user.email, resetToken);
-    console.log('🔁 Reset password email sent to:', user.email);
 
-    return res.json({ success: true, message: 'Письмо для сброса пароля отправлено' });
+    console.log('✅ Reset password email sent to:', email);
+    return res.json({ 
+      success: true, 
+      message: 'Письмо для сброса пароля отправлено' 
+    });
   } catch (err) {
-    console.error('🔁 Error in forgotPassword:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    console.error('❌ Error in forgotPassword:', err);
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -237,30 +285,39 @@ export const forgotPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
   try {
-    console.log('🔄 resetPassword token:', req.query.token);
+    console.log('🔄 Resetting password with token:', req.query.token);
     const { token } = req.query;
     const { password } = req.body;
-    const user = await User.findOne({
-      resetToken: token,
-      resetTokenExpires: { $gt: Date.now() },
-    });
-    console.log('➡️ Found user for resetPassword:', user);
+    
+    if (!token || !password) {
+      throw new APIError('Token and password are required', httpStatus.BAD_REQUEST);
+    }
+
+    const user = await User.findOneAndUpdate(
+      { 
+        resetToken: token,
+        resetTokenExpires: { $gt: Date.now() }
+      },
+      { 
+        password,
+        $unset: { resetToken: 1, resetTokenExpires: 1 }
+      },
+      { new: true }
+    );
 
     if (!user) {
       throw new APIError('Недействительный или просроченный токен', httpStatus.BAD_REQUEST);
     }
 
-    user.password = password;
-    user.resetToken = undefined;
-    user.resetTokenExpires = undefined;
-    await user.save();
-    console.log('✅ Password reset successful for:', user.email);
-
-    return res.json({ success: true, message: 'Пароль успешно обновлён' });
+    console.log('✅ Password reset for:', user.email);
+    return res.json({ 
+      success: true, 
+      message: 'Пароль успешно обновлён' 
+    });
   } catch (err) {
     console.error('❌ Error in resetPassword:', err);
-    res.status(err.status || 500).json({
-      status: err.status || 500,
+    res.status(err.status || httpStatus.INTERNAL_SERVER_ERROR).json({
+      status: err.status || httpStatus.INTERNAL_SERVER_ERROR,
       errors: err.message || 'Internal Server Error',
     });
   }
@@ -270,12 +327,9 @@ export default {
   signup,
   signin,
   current,
-  getMe,
-  updateMe,
-  signout,
   refreshTokens,
   sendVerificationEmail,
   verifyEmail,
   forgotPassword,
-  resetPassword,
+  resetPassword
 };

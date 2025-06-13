@@ -4,156 +4,241 @@ import paginate from './plugins/paginatePlugin';
 import toJSON from './plugins/toJSONPlugin';
 import APIError from '~/utils/apiError';
 import Role from './roleModel';
+import Token from './tokenModel';
 import config from '~/config/config';
 import httpStatus from 'http-status';
 
 const userSchema = mongoose.Schema(
-	{
-		firstName: {
-			type: String,
-			required: true
-		},
-		lastName: {
-			type: String,
-			required: true
-		},
-		userName: {
-			type: String,
-			required: true,
-			unique: true
-		},
-		email: {
-			type: String,
-			required: true,
-			unique: true
-		},
-		password: {
-			type: String,
-			required: true,
-			private: true
-		},
-		avatar: {
-			type: String,
-			default: 'avatar.png'
-		},
-		confirmed: {
-			type: Boolean,
-			default: false
-		},
-		roles: [
-			{
-				type: mongoose.SchemaTypes.ObjectId,
-				ref: 'roles'
-			}
-		]
-	},
-	{
-		timestamps: true,
-		toJSON: { virtuals: true }
-	}
+  {
+    firstName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    lastName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    userName: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true
+    },
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+      lowercase: true,
+      match: [/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/, 'Please fill a valid email address']
+    },
+    password: {
+      type: String,
+      required: true,
+      private: true,
+      minlength: 8,
+      maxlength: 128
+    },
+    avatar: {
+      type: String,
+      default: 'avatar.png'
+    },
+    confirmed: {
+      type: Boolean,
+      default: false
+    },
+    verifyToken: {
+      type: String,
+      private: true
+    },
+    verifyTokenExpires: {
+      type: Date,
+      private: true
+    },
+    resetToken: {
+      type: String,
+      private: true
+    },
+    resetTokenExpires: {
+      type: Date,
+      private: true
+    },
+    roles: [
+      {
+        type: mongoose.SchemaTypes.ObjectId,
+        ref: 'roles'
+      }
+    ]
+  },
+  {
+    timestamps: true,
+    toJSON: { 
+      virtuals: true,
+      transform: function(doc, ret) {
+        delete ret.password;
+        delete ret.verifyToken;
+        delete ret.verifyTokenExpires;
+        delete ret.resetToken;
+        delete ret.resetTokenExpires;
+        return ret;
+      }
+    }
+  }
 );
 
+// Плагины
 userSchema.plugin(toJSON);
 userSchema.plugin(paginate);
 
+// Виртуальные поля
 userSchema.virtual('avatarUrl').get(function () {
-	return config.IMAGE_URL + '/' + this.avatar;
+  return `${config.IMAGE_URL}/${this.avatar}`;
+});
+
+userSchema.virtual('fullName').get(function () {
+  return `${this.firstName} ${this.lastName}`;
 });
 
 class UserClass {
-	static async isUserNameAlreadyExists(userName, excludeUserId) {
-		return !!(await this.findOne({ userName, _id: { $ne: excludeUserId } }));
-	}
+  static async isUserNameTaken(userName, excludeUserId) {
+    const user = await this.findOne({ userName, _id: { $ne: excludeUserId } });
+    return !!user;
+  }
 
-	static async isEmailAlreadyExists(email, excludeUserId) {
-		return !!(await this.findOne({ email, _id: { $ne: excludeUserId } }));
-	}
+  static async isEmailTaken(email, excludeUserId) {
+    const user = await this.findOne({ email, _id: { $ne: excludeUserId } });
+    return !!user;
+  }
 
-	static async isRoleIdAlreadyExists(roleId, excludeUserId) {
-		return !!(await this.findOne({ roles: roleId, _id: { $ne: excludeUserId } }));
-	}
+  static async getUserById(id) {
+    const user = await this.findById(id).exec();
+    if (!user) {
+      throw new APIError('User not found', httpStatus.NOT_FOUND);
+    }
+    return user;
+  }
 
-	static async getUserById(id) {
-		return await this.findById(id);
-	}
+  static async getUserByIdWithRoles(id) {
+    const user = await this.findById(id)
+      .populate({ 
+        path: 'roles', 
+        select: 'name description permissions' 
+      })
+      .exec();
+    
+    if (!user) {
+      throw new APIError('User not found', httpStatus.NOT_FOUND);
+    }
+    return user;
+  }
 
-	static async getUserByIdWithRoles(id) {
-		return await this.findById(id).populate({ path: 'roles', select: 'name description createdAt updatedAt' });
-	}
+  static async getUserByUserName(userName) {
+    const user = await this.findOne({ userName }).exec();
+    if (!user) {
+      throw new APIError('User not found', httpStatus.NOT_FOUND);
+    }
+    return user;
+  }
 
-	static async getUserByUserName(userName) {
-		return await this.findOne({ userName });
-	}
+  static async getUserByEmail(email) {
+    const user = await this.findOne({ email }).exec();
+    return user;
+  }
 
-	static async getUserByEmail(email) {
-		return await this.findOne({ email });
-	}
+  static async createUser(userData) {
+    if (await this.isEmailTaken(userData.email)) {
+      throw new APIError('Email already taken', httpStatus.BAD_REQUEST);
+    }
+    if (await this.isUserNameTaken(userData.userName)) {
+      throw new APIError('Username already taken', httpStatus.BAD_REQUEST);
+    }
 
-	static async createUser(body) {
-		if (await this.isUserNameAlreadyExists(body.userName)) {
-			throw new APIError('User name already exists', httpStatus.BAD_REQUEST);
-		}
-		if (await this.isEmailAlreadyExists(body.email)) {
-			throw new APIError('Email already exists', httpStatus.BAD_REQUEST);
-		}
-		if (body.roles) {
-			await Promise.all(
-				body.roles.map(async (rid) => {
-					if (!(await Role.findById(rid))) {
-						throw new APIError('Roles not exist', httpStatus.BAD_REQUEST);
-					}
-				})
-			);
-		}
-		return await this.create(body);
-	}
+    if (userData.roles && userData.roles.length > 0) {
+      const rolesExist = await Role.countDocuments({ 
+        _id: { $in: userData.roles } 
+      });
+      
+      if (rolesExist !== userData.roles.length) {
+        throw new APIError('One or more roles do not exist', httpStatus.BAD_REQUEST);
+      }
+    }
 
-	static async updateUserById(userId, body) {
-		const user = await this.getUserById(userId);
-		if (!user) {
-			throw new APIError('User not found', httpStatus.NOT_FOUND);
-		}
-		if (await this.isUserNameAlreadyExists(body.userName, userId)) {
-			throw new APIError('User name already exists', httpStatus.BAD_REQUEST);
-		}
-		if (await this.isEmailAlreadyExists(body.email, userId)) {
-			throw new APIError('Email already exists', httpStatus.BAD_REQUEST);
-		}
-		if (body.roles) {
-			await Promise.all(
-				body.roles.map(async (rid) => {
-					if (!(await Role.findById(rid))) {
-						throw new APIError('Roles not exist', httpStatus.BAD_REQUEST);
-					}
-				})
-			);
-		}
-		Object.assign(user, body);
-		return await user.save();
-	}
+    return this.create(userData);
+  }
 
-	static async deleteUserById(userId) {
-		const user = await this.getUserById(userId);
-		if (!user) {
-			throw new APIError('User not found', httpStatus.NOT_FOUND);
-		}
-		return await user.remove();
-	}
+  static async updateUserById(userId, updateBody) {
+    const user = await this.getUserById(userId);
 
-	async isPasswordMatch(password) {
-		return bcrypt.compareSync(password, this.password);
-	}
+    if (updateBody.email && (await this.isEmailTaken(updateBody.email, userId))) {
+      throw new APIError('Email already taken', httpStatus.BAD_REQUEST);
+    }
+    if (updateBody.userName && (await this.isUserNameTaken(updateBody.userName, userId))) {
+      throw new APIError('Username already taken', httpStatus.BAD_REQUEST);
+    }
+
+    if (updateBody.roles && updateBody.roles.length > 0) {
+      const rolesExist = await Role.countDocuments({ 
+        _id: { $in: updateBody.roles } 
+      });
+      
+      if (rolesExist !== updateBody.roles.length) {
+        throw new APIError('One or more roles do not exist', httpStatus.BAD_REQUEST);
+      }
+    }
+
+    Object.assign(user, updateBody);
+    await user.save();
+    return user;
+  }
+
+  static async deleteUserById(userId) {
+    const user = await this.getUserById(userId);
+    await user.remove();
+    return user;
+  }
+
+  async isPasswordMatch(password) {
+    return bcrypt.compare(password, this.password);
+  }
+
+  async saveRefreshToken(token, expires) {
+    await Token.saveToken(token, this._id, expires, 'refresh');
+  }
+
+  async createVerifyToken() {
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    this.verifyToken = verifyToken;
+    this.verifyTokenExpires = Date.now() + config.VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
+    await this.save();
+    return verifyToken;
+  }
+
+  async createPasswordResetToken() {
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    this.resetToken = resetToken;
+    this.resetTokenExpires = Date.now() + config.RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
+    await this.save();
+    return resetToken;
+  }
 }
 
-userSchema.loadClass(UserClass);
-
-userSchema.pre('save', async function (next) {
-	if (this.isModified('password')) {
-		const passwordGenSalt = bcrypt.genSaltSync(10);
-		this.password = bcrypt.hashSync(this.password, passwordGenSalt);
-	}
-	next();
+// Хуки
+userSchema.pre('save', async function(next) {
+  if (this.isModified('password')) {
+    this.password = await bcrypt.hash(this.password, 10);
+  }
+  next();
 });
+
+userSchema.pre('remove', async function(next) {
+  await Token.deleteMany({ user: this._id });
+  next();
+});
+
+userSchema.loadClass(UserClass);
 
 const User = mongoose.model('users', userSchema);
 
