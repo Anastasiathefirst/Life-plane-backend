@@ -15,9 +15,9 @@ export const signup = async (req, res) => {
       throw new APIError('Invalid Content-Type', httpStatus.BAD_REQUEST);
     }
 
-    const { email, password, firstName, lastName, userName } = req.body;
-    
-    if (!email || !password || !firstName || !lastName || !userName) {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
       throw new APIError('Missing required fields', httpStatus.BAD_REQUEST);
     }
 
@@ -38,9 +38,6 @@ export const signup = async (req, res) => {
     const user = await User.createUser({
       email,
       password,
-      firstName,
-      lastName,
-      userName,
       roles: [role.id],
       confirmed: false,
     });
@@ -51,28 +48,22 @@ export const signup = async (req, res) => {
 
     console.log('🔑 Generating verification token');
     const verifyToken = await tokenService.generateVerifyEmailToken(user);
-    
     console.log('🔑 Generating auth tokens');
     const tokens = await tokenService.generateAuthTokens(user);
-
     console.log('📨 Sending verification email');
     await emailService.sendVerificationEmail(user.email, verifyToken);
-    
     console.log('🌐 Creating initial spheres');
     await sphereController.createInitialSpheres(user.id);
 
     console.log('✅ User registration successful');
     return res.status(httpStatus.CREATED).json({
       success: true,
-      data: { 
+      data: {
         user: {
           id: user.id,
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          userName: user.userName
         },
-        tokens 
+        tokens,
       },
     });
   } catch (err) {
@@ -94,13 +85,13 @@ export const verifyEmail = async (req, res) => {
     }
 
     const user = await User.findOneAndUpdate(
-      { 
+      {
         verifyToken: token,
-        verifyTokenExpires: { $gt: Date.now() }
+        verifyTokenExpires: { $gt: Date.now() },
       },
-      { 
+      {
         $set: { confirmed: true },
-        $unset: { verifyToken: 1, verifyTokenExpires: 1 }
+        $unset: { verifyToken: 1, verifyTokenExpires: 1 },
       },
       { new: true }
     );
@@ -126,14 +117,14 @@ export const verifyEmail = async (req, res) => {
 export const signin = async (req, res) => {
   try {
     console.log('🔑 Signin request:', JSON.stringify(req.body));
-    const { userName, password } = req.body;
+    const { email, password } = req.body;
 
-    if (!userName || !password) {
-      throw new APIError('Username and password are required', httpStatus.BAD_REQUEST);
+    if (!email || !password) {
+      throw new APIError('Email and password are required', httpStatus.BAD_REQUEST);
     }
 
-    console.log('🔍 Finding user:', userName);
-    const user = await User.getUserByUserName(userName);
+    console.log('🔍 Finding user by email:', email);
+    const user = await User.getUserByEmail(email);
     if (!user) {
       throw new APIError('Неверные учетные данные', httpStatus.UNAUTHORIZED);
     }
@@ -151,18 +142,15 @@ export const signin = async (req, res) => {
     console.log('🔑 Generating auth tokens');
     const tokens = await tokenService.generateAuthTokens(user);
 
-    console.log('✅ Login successful for:', user.userName);
+    console.log('✅ Login successful for:', user.email);
     return res.json({
       success: true,
-      data: { 
+      data: {
         user: {
           id: user.id,
           email: user.email,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          userName: user.userName
         },
-        tokens 
+        tokens,
       },
     });
   } catch (err) {
@@ -181,9 +169,9 @@ export const current = async (req, res) => {
     if (!user) {
       throw new APIError('User not found', httpStatus.NOT_FOUND);
     }
-    return res.json({ 
-      success: true, 
-      data: user 
+    return res.json({
+      success: true,
+      data: user,
     });
   } catch (err) {
     console.error('❌ Error in current:', err);
@@ -198,7 +186,7 @@ export const refreshTokens = async (req, res) => {
   try {
     console.log('🔄 Refreshing tokens with:', req.body.refreshToken);
     const { refreshToken } = req.body;
-    
+
     if (!refreshToken) {
       throw new APIError('Refresh token is required', httpStatus.BAD_REQUEST);
     }
@@ -207,9 +195,9 @@ export const refreshTokens = async (req, res) => {
     const tokens = await tokenService.generateAuthTokens(user);
 
     console.log('✅ Tokens refreshed for:', user.id);
-    return res.json({ 
-      success: true, 
-      data: { tokens } 
+    return res.json({
+      success: true,
+      data: { tokens },
     });
   } catch (err) {
     console.error('❌ Error in refreshTokens:', err);
@@ -229,9 +217,9 @@ export const sendVerificationEmail = async (req, res) => {
     }
 
     if (user.confirmed) {
-      return res.json({ 
-        success: true, 
-        message: 'Email уже подтверждён' 
+      return res.json({
+        success: true,
+        message: 'Email уже подтверждён',
       });
     }
 
@@ -239,9 +227,9 @@ export const sendVerificationEmail = async (req, res) => {
     await emailService.sendVerificationEmail(user.email, verifyToken);
 
     console.log('✅ Verification email sent to:', user.email);
-    return res.json({ 
-      success: true, 
-      message: 'Письмо отправлено' 
+    return res.json({
+      success: true,
+      message: 'Письмо отправлено',
     });
   } catch (err) {
     console.error('❌ Error in sendVerificationEmail:', err);
@@ -256,7 +244,7 @@ export const forgotPassword = async (req, res) => {
   try {
     console.log('🔑 Forgot password request for:', req.body.email);
     const { email } = req.body;
-    
+
     if (!email) {
       throw new APIError('Email is required', httpStatus.BAD_REQUEST);
     }
@@ -270,9 +258,9 @@ export const forgotPassword = async (req, res) => {
     await emailService.sendResetPasswordEmail(user.email, resetToken);
 
     console.log('✅ Reset password email sent to:', email);
-    return res.json({ 
-      success: true, 
-      message: 'Письмо для сброса пароля отправлено' 
+    return res.json({
+      success: true,
+      message: 'Письмо для сброса пароля отправлено',
     });
   } catch (err) {
     console.error('❌ Error in forgotPassword:', err);
@@ -288,19 +276,19 @@ export const resetPassword = async (req, res) => {
     console.log('🔄 Resetting password with token:', req.query.token);
     const { token } = req.query;
     const { password } = req.body;
-    
+
     if (!token || !password) {
       throw new APIError('Token and password are required', httpStatus.BAD_REQUEST);
     }
 
     const user = await User.findOneAndUpdate(
-      { 
+      {
         resetToken: token,
-        resetTokenExpires: { $gt: Date.now() }
+        resetTokenExpires: { $gt: Date.now() },
       },
-      { 
+      {
         password,
-        $unset: { resetToken: 1, resetTokenExpires: 1 }
+        $unset: { resetToken: 1, resetTokenExpires: 1 },
       },
       { new: true }
     );
@@ -310,9 +298,9 @@ export const resetPassword = async (req, res) => {
     }
 
     console.log('✅ Password reset for:', user.email);
-    return res.json({ 
-      success: true, 
-      message: 'Пароль успешно обновлён' 
+    return res.json({
+      success: true,
+      message: 'Пароль успешно обновлён',
     });
   } catch (err) {
     console.error('❌ Error in resetPassword:', err);
@@ -331,5 +319,5 @@ export default {
   sendVerificationEmail,
   verifyEmail,
   forgotPassword,
-  resetPassword
+  resetPassword,
 };
