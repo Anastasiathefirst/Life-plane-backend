@@ -80,7 +80,7 @@ var signup = /*#__PURE__*/function () {
         case 27:
           console.log('🔑 Generating verification token');
           _context.next = 30;
-          return _tokenService["default"].generateVerifyEmailToken(user);
+          return user.createVerifyToken();
         case 30:
           verifyToken = _context.sent;
           console.log('🔑 Generating auth tokens');
@@ -386,7 +386,7 @@ var sendVerificationEmail = /*#__PURE__*/function () {
           }));
         case 9:
           _context6.next = 11;
-          return _tokenService["default"].generateVerifyEmailToken(user);
+          return user.createVerifyToken();
         case 11:
           verifyToken = _context6.sent;
           _context6.next = 14;
@@ -442,7 +442,7 @@ var forgotPassword = /*#__PURE__*/function () {
           throw new _apiError["default"]('Пользователь не найден', _httpStatus["default"].NOT_FOUND);
         case 10:
           _context7.next = 12;
-          return _tokenService["default"].generateVerifyEmailToken(user);
+          return user.createPasswordResetToken();
         case 12:
           resetToken = _context7.sent;
           _context7.next = 15;
