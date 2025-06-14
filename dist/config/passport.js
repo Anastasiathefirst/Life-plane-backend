@@ -11,10 +11,13 @@ var _passportJwt = require("passport-jwt");
 var _passport = _interopRequireDefault(require("passport"));
 var _config = _interopRequireDefault(require("./config"));
 var _userModel = _interopRequireDefault(require("../models/userModel"));
+// 🔍 DEBUG LOG
+console.log("🔐 JWT_SECRET used in passport strategy:", _config["default"].JWT_SECRET);
 _passport["default"].use(new _passportJwt.Strategy({
   jwtFromRequest: _passportJwt.ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: _config["default"].JWT_ACCESS_TOKEN_SECRET_PUBLIC,
-  algorithms: 'RS256'
+  secretOrKey: _config["default"].JWT_SECRET,
+  // 👈 HS256 секрет
+  algorithms: ['HS256']
 }, /*#__PURE__*/function () {
   var _ref = (0, _asyncToGenerator2["default"])( /*#__PURE__*/_regenerator["default"].mark(function _callee(jwtPayload, done) {
     var user;
