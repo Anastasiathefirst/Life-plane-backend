@@ -7,6 +7,7 @@ import Role from './roleModel';
 import Token from './tokenModel';
 import config from '~/config/config';
 import httpStatus from 'http-status';
+import crypto from 'crypto';
 
 const userSchema = mongoose.Schema(
   {
@@ -162,7 +163,7 @@ class UserClass {
   }
 
   async createVerifyToken() {
-    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const verifyToken = Math.floor(100000 + Math.random() * 900000).toString();
     this.verifyToken = verifyToken;
     this.verifyTokenExpires =
       Date.now() + config.VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES * 60 * 1000;

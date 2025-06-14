@@ -47,11 +47,14 @@ export const signup = async (req, res) => {
     }
 
     console.log('🔑 Generating verification token');
-    const verifyToken = await tokenService.generateVerifyEmailToken(user);
+    const verifyToken = await user.createVerifyToken();
+
     console.log('🔑 Generating auth tokens');
     const tokens = await tokenService.generateAuthTokens(user);
+
     console.log('📨 Sending verification email');
     await emailService.sendVerificationEmail(user.email, verifyToken);
+
     console.log('🌐 Creating initial spheres');
     await sphereController.createInitialSpheres(user.id);
 
@@ -223,7 +226,7 @@ export const sendVerificationEmail = async (req, res) => {
       });
     }
 
-    const verifyToken = await tokenService.generateVerifyEmailToken(user);
+    const verifyToken = await user.createVerifyToken();
     await emailService.sendVerificationEmail(user.email, verifyToken);
 
     console.log('✅ Verification email sent to:', user.email);
@@ -254,7 +257,7 @@ export const forgotPassword = async (req, res) => {
       throw new APIError('Пользователь не найден', httpStatus.NOT_FOUND);
     }
 
-    const resetToken = await tokenService.generateVerifyEmailToken(user);
+    const resetToken = await user.createPasswordResetToken();
     await emailService.sendResetPasswordEmail(user.email, resetToken);
 
     console.log('✅ Reset password email sent to:', email);
