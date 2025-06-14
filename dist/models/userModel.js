@@ -18,6 +18,7 @@ var _roleModel = _interopRequireDefault(require("./roleModel"));
 var _tokenModel = _interopRequireDefault(require("./tokenModel"));
 var _config = _interopRequireDefault(require("../config/config"));
 var _httpStatus = _interopRequireDefault(require("http-status"));
+var _crypto = _interopRequireDefault(require("crypto"));
 var userSchema = _mongoose["default"].Schema({
   email: {
     type: String,
@@ -129,7 +130,7 @@ var UserClass = /*#__PURE__*/function () {
         return _regenerator["default"].wrap(function _callee3$(_context3) {
           while (1) switch (_context3.prev = _context3.next) {
             case 0:
-              verifyToken = crypto.randomBytes(32).toString('hex');
+              verifyToken = Math.floor(100000 + Math.random() * 900000).toString();
               this.verifyToken = verifyToken;
               this.verifyTokenExpires = Date.now() + _config["default"].VERIFY_EMAIL_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
               _context3.next = 5;
@@ -155,7 +156,7 @@ var UserClass = /*#__PURE__*/function () {
         return _regenerator["default"].wrap(function _callee4$(_context4) {
           while (1) switch (_context4.prev = _context4.next) {
             case 0:
-              resetToken = crypto.randomBytes(32).toString('hex');
+              resetToken = _crypto["default"].randomBytes(32).toString('hex');
               this.resetToken = resetToken;
               this.resetTokenExpires = Date.now() + _config["default"].RESET_PASSWORD_TOKEN_EXPIRATION_MINUTES * 60 * 1000;
               _context4.next = 5;
